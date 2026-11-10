@@ -1,0 +1,70 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.lock
+.process.lock
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ================================
+# 实验结果、数据文件与模型权重（纯代码模式）
+# ================================
+result/
+data/dynamic_scenarios/
+data/test_samples/
+*.xlsx
+*.xls
+*.pt
+*.pth
+*.json
+events.out.tfevents.*
