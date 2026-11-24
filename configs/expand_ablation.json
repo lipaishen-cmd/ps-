@@ -1,0 +1,35 @@
+{
+  "schema": "expand_ablation_v1",
+  "claim": "C2",
+  "methods": ["AD-HG-DAPPO", "DAPPO-Expand"],
+  "ablation_method_id": "DAPPO-Expand",
+  "ablation_code_id": "dappo_expand",
+  "graph_construction_modes": {
+    "AD-HG-DAPPO": "on_demand_progressive",
+    "DAPPO-Expand": "pre_expand_all_candidate_templates"
+  },
+  "formal_seeds": [1, 2, 3],
+  "stages": [1, 2, 3],
+  "episodes_per_stage": 1800,
+  "max_partition_templates": 16,
+  "default_k_scope": 8,
+  "default_k_seed": 5,
+  "delta_k": 4,
+  "d_h": 32,
+  "split_lr": 0.0003,
+  "placement_lr": 0.00015,
+  "encoder_lr": 0.0003,
+  "critic_lr": 0.0003,
+  "sheet_name": "Sheet1",
+  "cpu_threads": 1,
+  "proposed_checkpoints": {
+    "1": "result/主算法/stage1/seed_{seed}/stage1_best.pt",
+    "2": "result/主算法/stage2/seed_{seed}/stage2_best.pt",
+    "3": "result/主算法/stage3/seed_{seed}/stage3_best.pt"
+  },
+  "expand_checkpoints": {
+    "1": "result/消融实验/全模板预展开/stage1/seed_{seed}/stage1_best.pt",
+    "2": "result/消融实验/全模板预展开/stage2/seed_{seed}/stage2_best.pt",
+    "3": "result/消融实验/全模板预展开/stage3/seed_{seed}/stage3_best.pt"
+  }
+}

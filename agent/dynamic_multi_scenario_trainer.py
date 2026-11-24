@@ -19,6 +19,7 @@ import atexit
 import copy
 import hashlib
 import json
+import math
 import os
 import random
 import sys
@@ -56,7 +57,7 @@ STAGE_VALIDATION_FILENAMES: Dict[int, Tuple[str, ...]] = {
         "scenario_val_005.xlsx",
     ),
 }
-_CHECKPOINT_SELECTION_EPS = 1e-2
+_CHECKPOINT_SELECTION_EPS = 1e-6
 
 
 def resolve_trainer_identity(trainer: Any) -> Tuple[str, str]:
@@ -98,7 +99,7 @@ def stage_validation_protocol(stage_index: int) -> str:
     if filenames is None:
         raise ValueError(f"阶段编号必须为 1..3，收到 {stage_index!r}。")
     suffix = "".join(os.path.splitext(filename)[0].rsplit("_", 1)[-1][-1] for filename in filenames)
-    return f"stage{stage}_val{suffix}_all_feasible_mean_then_worst_v1"
+    return f"stage{stage}_val{suffix}_feasibility_then_mean_cmax_v1"
 
 
 def summarize_stage_validation_selection(
@@ -107,9 +108,8 @@ def summarize_stage_validation_selection(
 ) -> Dict[str, Any]:
     """Build one auditable two-scenario Stage checkpoint score.
 
-    A candidate is eligible only when both fixed validation scenarios are
-    autonomously feasible.  Eligible candidates are ranked by lower equal-
-    weight mean Cmax and, for near-equal means, lower worst-case Cmax.
+    Candidates are ranked by highest autonomous feasibility rate across the
+    fixed validation set, then lowest mean Cmax.
     """
     stage = int(stage_index)
     expected = list(STAGE_VALIDATION_FILENAMES.get(stage, ()))
@@ -131,7 +131,7 @@ def summarize_stage_validation_selection(
         detail = detail_by_file.get(filename)
         success = bool(detail and detail.get("autonomous_success"))
         raw_cmax = float(detail.get("raw_actor_cmax", float("inf"))) if detail else float("inf")
-        finite_cmax = raw_cmax != float("inf") and raw_cmax == raw_cmax
+        finite_cmax = math.isfinite(raw_cmax)
         if success and finite_cmax:
             successful_scenarios += 1
             cmax_values.append(raw_cmax)
@@ -144,41 +144,85 @@ def summarize_stage_validation_selection(
             }
         )
 
+    total_scenarios = len(expected)
+    feasibility_rate = successful_scenarios / max(1, total_scenarios)
     eligible = (
         not missing_files
         and not unexpected_files
-        and successful_scenarios == len(expected)
-        and len(cmax_values) == len(expected)
+        and successful_scenarios > 0
+        and len(cmax_values) == successful_scenarios
     )
+    if eligible:
+        mean_cmax = sum(cmax_values) / len(cmax_values)
+        worst_cmax = max(cmax_values)
+        var_cmax = sum((x - mean_cmax) ** 2 for x in cmax_values) / len(cmax_values)
+        std_cmax = math.sqrt(var_cmax)
+    else:
+        mean_cmax = None
+        worst_cmax = None
+        var_cmax = None
+        std_cmax = None
     return {
         "protocol": stage_validation_protocol(stage),
         "stage": stage,
         "validation_files": expected,
         "eligible": eligible,
         "successful_scenarios": successful_scenarios,
-        "mean_cmax": (sum(cmax_values) / len(cmax_values)) if eligible else None,
-        "worst_cmax": max(cmax_values) if eligible else None,
+        "total_scenarios": total_scenarios,
+        "feasibility_rate": feasibility_rate,
+        "mean_cmax": mean_cmax,
+        "worst_cmax": worst_cmax,
+        "var_cmax": var_cmax,
+        "std_cmax": std_cmax,
         "missing_files": missing_files,
         "unexpected_files": unexpected_files,
         "per_file": per_file,
     }
 
 
+def _is_validation_metrics_better(
+    *,
+    eligible: bool,
+    cand_feasibility_rate: float,
+    cand_mean_cmax: float,
+    best_feasibility_rate: float,
+    best_mean_cmax: float,
+    cand_worst_cmax: float = float("inf"),
+    cand_std_cmax: float = float("inf"),
+    best_worst_cmax: float = float("inf"),
+    best_std_cmax: float = float("inf"),
+) -> bool:
+    """Rank candidates by feasibility rate, then lower validation mean Cmax."""
+    if not eligible:
+        return False
+    if best_feasibility_rate >= 0.0:
+        if cand_feasibility_rate > best_feasibility_rate + 1e-4:
+            return True
+        if cand_feasibility_rate < best_feasibility_rate - 1e-4:
+            return False
+    return cand_mean_cmax < best_mean_cmax - _CHECKPOINT_SELECTION_EPS
+
+
 def is_stage_validation_candidate_better(
     candidate: Dict[str, Any],
     best_mean_cmax: float,
-    best_worst_cmax: float,
+    best_worst_cmax: float = float("inf"),
+    best_feasibility_rate: float = -1.0,
+    best_std_cmax: float = float("inf"),
 ) -> bool:
-    """Apply the common all-feasible mean-then-worst Stage ordering."""
+    """Apply the feasibility -> mean Cmax Stage checkpoint ordering."""
     if not candidate.get("eligible"):
         return False
-    candidate_mean = float(candidate["mean_cmax"])
-    candidate_worst = float(candidate["worst_cmax"])
-    if candidate_mean < best_mean_cmax - _CHECKPOINT_SELECTION_EPS:
-        return True
-    return (
-        abs(candidate_mean - best_mean_cmax) <= _CHECKPOINT_SELECTION_EPS
-        and candidate_worst < best_worst_cmax - _CHECKPOINT_SELECTION_EPS
+    cand_feas = float(
+        candidate.get("feasibility_rate", 1.0 if candidate.get("eligible") else 0.0)
+    )
+    cand_mean = float(candidate["mean_cmax"])
+    return _is_validation_metrics_better(
+        eligible=True,
+        cand_feasibility_rate=cand_feas,
+        cand_mean_cmax=cand_mean,
+        best_feasibility_rate=best_feasibility_rate,
+        best_mean_cmax=best_mean_cmax,
     )
 
 
@@ -1226,7 +1270,7 @@ class DynamicMultiScenarioTrainer:
         return files
 
     def _discover_stage_validation_files(self, stage_index: int) -> List[str]:
-        """Resolve the fixed 01/23/45 validation window for one Stage."""
+        """Resolve the fixed two-scenario validation window for one Stage."""
         stage = int(stage_index)
         expected_filenames = STAGE_VALIDATION_FILENAMES.get(stage)
         if expected_filenames is None:
@@ -1297,8 +1341,13 @@ class DynamicMultiScenarioTrainer:
         if not self.val_files:
             return {
                 "count": 0,
+                "successful_scenarios": 0,
+                "total_scenarios": 0,
                 "mean_cmax": float("inf"),
                 "mean_actor_cmax": float("inf"),
+                "worst_cmax": float("inf"),
+                "var_cmax": float("inf"),
+                "std_cmax": float("inf"),
                 "autonomous_feasibility_rate": 0.0,
                 "details": [],
             }
@@ -1355,15 +1404,29 @@ class DynamicMultiScenarioTrainer:
             for module, training in zip(eval_modules, was_training):
                 module.train(training)
 
-        mean_raw_cmax = sum(all_raw_cmax) / len(all_raw_cmax) if all_raw_cmax else float("inf")
+        if all_raw_cmax:
+            mean_raw_cmax = sum(all_raw_cmax) / len(all_raw_cmax)
+            worst_raw_cmax = max(all_raw_cmax)
+            var_raw_cmax = sum((x - mean_raw_cmax) ** 2 for x in all_raw_cmax) / len(all_raw_cmax)
+            std_raw_cmax = math.sqrt(var_raw_cmax)
+        else:
+            mean_raw_cmax = float("inf")
+            worst_raw_cmax = float("inf")
+            var_raw_cmax = float("inf")
+            std_raw_cmax = float("inf")
         selection_summary = None
         if self.stage_only is not None:
             selection_summary = summarize_stage_validation_selection(self.stage_only, results)
 
         return {
             "count": len(results),
+            "successful_scenarios": successful_scenarios,
+            "total_scenarios": len(results),
             "mean_cmax": mean_raw_cmax,
             "mean_actor_cmax": mean_raw_cmax,
+            "worst_cmax": worst_raw_cmax,
+            "var_cmax": var_raw_cmax,
+            "std_cmax": std_raw_cmax,
             "autonomous_feasibility_rate": successful_scenarios / max(1, len(results)),
             "details": results,
             "selection_protocol": self.model_selection_protocol,
@@ -1385,13 +1448,7 @@ class DynamicMultiScenarioTrainer:
     ) -> Dict[str, Any]:
         """运行多场景联合训练主循环。
 
-        核心工程能力：
-          1. 课程学习与轮询调度：支持三组订单属性渐进采样与 round_robin 轮询调度；
-          2. 正式预生成 Manifest 固定 18 训练场景合计 5400 轮（每阶段 1800 轮，6 个算例循环 300 次，每走完一轮循环 6 个算例集中更新一次 PPO，共 300 次 PPO更新）；
-          3. 实时中途曲线落盘：每个 Episode 结束后立即将训练轨迹与评估曲线刷新写入 log_out；
-          4. 支持优雅随时暂停：随时按 Ctrl+C 或创建 'pause.flag' 标记文件安全挂起，不丢数据并自动保存中断断点；
-          5. 支持断点无缝续训：指定 resume=True 自动载入历史轮次与日志向后继续推进，曲线无缝衔接；
-          6. Checkpoint 先按完整自主可行率、再按成功场景平均 Cmax 排序。
+        支持课程/轮询调度、逐轮日志落盘、pause.flag 暂停保存、断点续训与最优检查点筛选。
         """
         random.seed(seed)
         torch.manual_seed(seed)
@@ -1406,6 +1463,7 @@ class DynamicMultiScenarioTrainer:
         best_autonomous_feasibility_rate = -1.0
         best_val_cmax = float("inf")
         best_worst_val_cmax = float("inf")
+        best_std_val_cmax = float("inf")
         history: List[Dict[str, Any]] = []
         val_history: List[Dict[str, Any]] = []
         selection_switch: Optional[Dict[str, Any]] = None
@@ -1450,7 +1508,7 @@ class DynamicMultiScenarioTrainer:
                     if saved_protocol != self.model_selection_protocol:
                         raise RuntimeError(
                             f"Stage {self.stage_only} 验证选模协议与历史日志不一致；"
-                            "禁止把旧的单场景指标混入新的两场景综合选模。"
+                            "禁止混用不同验证协议的历史日志。"
                         )
                     saved_val_files = list(past_report.get("model_selection_val_files", []))
                     if saved_val_files != self.model_selection_val_files:
@@ -1458,11 +1516,15 @@ class DynamicMultiScenarioTrainer:
                             f"Stage {self.stage_only} 验证文件与历史日志不一致："
                             f"saved={saved_val_files}, active={self.model_selection_val_files}"
                         )
-                best_autonomous_feasibility_rate = past_report.get(
-                    "best_autonomous_feasibility_rate", -1.0
+                best_autonomous_feasibility_rate = float(
+                    past_report.get("best_autonomous_feasibility_rate", -1.0)
                 )
-                best_val_cmax = past_report.get("best_val_cmax", float("inf"))
-                best_worst_val_cmax = past_report.get("best_worst_val_cmax", float("inf"))
+                raw_best_cmax = past_report.get("best_val_cmax")
+                best_val_cmax = float("inf") if raw_best_cmax is None else float(raw_best_cmax)
+                raw_best_worst = past_report.get("best_worst_val_cmax")
+                best_worst_val_cmax = float("inf") if raw_best_worst is None else float(raw_best_worst)
+                raw_best_std = past_report.get("best_std_val_cmax")
+                best_std_val_cmax = float("inf") if raw_best_std is None else float(raw_best_std)
                 selection_switch = past_report.get("model_selection_switch")
                 if history:
                     log_episode = int(history[-1]["episode"])
@@ -1531,7 +1593,7 @@ class DynamicMultiScenarioTrainer:
             if SummaryWriter is not None:
                 writer = SummaryWriter(log_dir=run_dir)
                 print(f"TensorBoard 实时监控已就绪，统一日志目录: {run_dir}")
-                # 仅在全新子目录（无已有事件文件）且存在历史日志时，进行全量历史指标无缝回填
+                # 新建子目录且存在历史日志时回填历史指标
                 has_existing_events = any(f.startswith("events.out.tfevents") for f in os.listdir(run_dir))
                 if resume and history and not has_existing_events:
                     print(f"  >>> [TensorBoard] 正在快速同步回填历史 {len(history)} 轮训练曲线与 {len(val_history)} 轮评估曲线...")
@@ -1642,6 +1704,7 @@ class DynamicMultiScenarioTrainer:
                 "best_autonomous_feasibility_rate": best_autonomous_feasibility_rate,
                 "best_val_cmax": best_val_cmax,
                 "best_worst_val_cmax": best_worst_val_cmax if best_worst_val_cmax != float("inf") else None,
+                "best_std_val_cmax": best_std_val_cmax if best_std_val_cmax != float("inf") else None,
                 "model_selection_switch": selection_switch,
                 "reward_scale": self.reward_scale,
                 "checkpoint_out": checkpoint_out,
@@ -1814,6 +1877,7 @@ class DynamicMultiScenarioTrainer:
                                 "best_autonomous_feasibility_rate": best_autonomous_feasibility_rate,
                                 "best_val_cmax": best_val_cmax,
                                 "best_worst_val_cmax": best_worst_val_cmax,
+                                "best_std_val_cmax": best_std_val_cmax,
                             },
                         )
                     except Exception as ckpt_err:
@@ -1865,37 +1929,51 @@ class DynamicMultiScenarioTrainer:
                         writer.add_scalar("Val/Autonomous_Feasibility_Percent", val_res["autonomous_feasibility_rate"] * 100.0, ep)
                         writer.flush()
 
-                    # 三个独立 Stage 均只接受其固定两场景验证窗口全部可行的
-                    # 候选，再按等权平均 Cmax 与最差 Cmax 排序。
+                    # 选模规则：先比自主可行率，可行率相同时按验证集平均 Cmax 最优排序。
                     is_improved = False
-                    feasibility_rate = val_res["autonomous_feasibility_rate"]
-                    actor_cmax = val_res["mean_actor_cmax"]
+                    feasibility_rate = float(val_res["autonomous_feasibility_rate"])
+                    actor_cmax = float(val_res["mean_actor_cmax"])
+                    worst_cmax = float(val_res["worst_cmax"])
+                    std_cmax = float(val_res["std_cmax"])
+                    successful_cnt = int(val_res["successful_scenarios"])
+                    total_val_cnt = int(val_res["total_scenarios"])
                     selection_summary = val_res.get("selection_summary")
                     if self.stage_only is not None:
                         if selection_summary is None:
                             raise RuntimeError(
-                                f"Stage {self.stage_only} 两场景选模未生成综合验证摘要。"
+                                f"Stage {self.stage_only} 两场景选模未生成验证摘要。"
                             )
                         is_improved = is_stage_validation_candidate_better(
                             candidate=selection_summary,
                             best_mean_cmax=best_val_cmax,
                             best_worst_cmax=best_worst_val_cmax,
+                            best_feasibility_rate=best_autonomous_feasibility_rate,
+                            best_std_cmax=best_std_val_cmax,
                         )
                     else:
-                        if feasibility_rate > best_autonomous_feasibility_rate + 1e-4:
-                            is_improved = True
-                        elif abs(feasibility_rate - best_autonomous_feasibility_rate) <= 1e-4:
-                            if actor_cmax < best_val_cmax - _CHECKPOINT_SELECTION_EPS:
-                                is_improved = True
+                        is_improved = _is_validation_metrics_better(
+                            eligible=(successful_cnt > 0 and math.isfinite(actor_cmax)),
+                            cand_feasibility_rate=feasibility_rate,
+                            cand_mean_cmax=actor_cmax,
+                            best_feasibility_rate=best_autonomous_feasibility_rate,
+                            best_mean_cmax=best_val_cmax,
+                        )
 
                     if is_improved:
                         if self.stage_only is not None:
-                            best_autonomous_feasibility_rate = 1.0
+                            best_autonomous_feasibility_rate = float(selection_summary["feasibility_rate"])
                             best_val_cmax = float(selection_summary["mean_cmax"])
                             best_worst_val_cmax = float(selection_summary["worst_cmax"])
+                            best_std_val_cmax = float(selection_summary["std_cmax"])
+                            succ_cnt = int(selection_summary["successful_scenarios"])
+                            tot_cnt = int(selection_summary["total_scenarios"])
                         else:
                             best_autonomous_feasibility_rate = feasibility_rate
                             best_val_cmax = actor_cmax
+                            best_worst_val_cmax = worst_cmax
+                            best_std_val_cmax = std_cmax
+                            succ_cnt = successful_cnt
+                            tot_cnt = total_val_cnt
                         if checkpoint_out:
                             try:
                                 saved_path = self.trainer.save_checkpoint(
@@ -1908,18 +1986,16 @@ class DynamicMultiScenarioTrainer:
                                         "best_autonomous_feasibility_rate": best_autonomous_feasibility_rate,
                                         "best_val_cmax": best_val_cmax,
                                         "best_worst_val_cmax": best_worst_val_cmax,
+                                        "best_std_val_cmax": best_std_val_cmax,
                                     },
                                 )
                                 if self.stage_only is not None:
                                     print(
-                                        f"  >>> [Checkpoint] 刷新 Stage {self.stage_only} 两场景综合最优策略！"
-                                        f"2/2 可行，平均 Cmax={best_val_cmax:.1f} min，"
-                                        f"最差 Cmax={best_worst_val_cmax:.1f} min -> 已导出: {saved_path}"
+                                        f"  >>> [Checkpoint] 刷新 Stage {self.stage_only} 验证集最优策略！{succ_cnt}/{tot_cnt} 可行，平均 Cmax={best_val_cmax:.1f} min -> 已导出: {saved_path}"
                                     )
                                 else:
                                     print(
-                                        f"  >>> [Checkpoint] 刷新最优自主策略！完整可行率={best_autonomous_feasibility_rate * 100:.1f}%, "
-                                        f"Actor Cmax={best_val_cmax:.1f} min -> 已导出: {saved_path}"
+                                        f"  >>> [Checkpoint] 刷新最优自主策略！完整可行率={best_autonomous_feasibility_rate * 100:.1f}%, 平均 Actor Cmax={best_val_cmax:.1f} min -> 已导出: {saved_path}"
                                     )
                             except Exception as best_err:
                                 print(f"[提示] 最优策略权重写入受限 ({best_err})，暂缓写入以防中断。")
@@ -1962,6 +2038,7 @@ class DynamicMultiScenarioTrainer:
             "best_autonomous_feasibility_rate": best_autonomous_feasibility_rate,
             "best_val_cmax": best_val_cmax,
             "best_worst_val_cmax": best_worst_val_cmax if best_worst_val_cmax != float("inf") else None,
+            "best_std_val_cmax": best_std_val_cmax if best_std_val_cmax != float("inf") else None,
             "reward_scale": self.reward_scale,
             "checkpoint_out": checkpoint_out,
             "latest_checkpoint_out": latest_checkpoint_out,
@@ -2113,8 +2190,8 @@ def main():
                 )
             with open(log_file_abs, "r", encoding="utf-8") as f:
                 saved_log = json.load(f)
-            # 三个独立 Stage 都采用固定两场景综合选模；旧单场景
-            # 日志不得与新协议混用。断点还必须属于当前 Stage。
+            # 三个独立 Stage 都采用固定两场景选模；历史旧协议
+            # 日志不得与当前协议混用。断点还必须属于当前 Stage。
             if trainer_driver.stage_only is not None:
                 saved_protocol = saved_log.get("model_selection_protocol")
                 if saved_protocol != trainer_driver.model_selection_protocol:

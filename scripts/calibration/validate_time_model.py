@@ -1,17 +1,4 @@
-"""
-validate_time_model.py
-======================
-【物理合同检查程序 2】
-检查对象：
-  1. 四层物理制造层级映射：PANEL 需求量 Q_i、最大叠片层数 ML_i -> 物理叠板单元数 S_i = ceil(Q_i / ML_i) 守恒性；
-  2. 批次单趟加工工时 P(i, m) 与执行批次叠板单元数 B_b 的独立性验证（式 1~5）；
-  3. 机型工时参数核验（辅助装夹工时 t_aux、换型工时 s_setup、换刀工时 t_tool、钻削效率 v、换刀孔限 H）；
-  4. 顺序相关换型时间 σ_{c,b}^m 决策规则闭合验证（式 6~7）；
-  5. 事件驱动释放时刻与机台队列开工时间因果闭合递推关系（式 16）。
-
-运行命令：
-  python validate_time_model.py
-"""
+"""PCB 物理制造模型、工时计算与换型时间参数一致性检查。"""
 
 from __future__ import annotations
 
@@ -124,7 +111,9 @@ def calibrate_physical_parameters() -> Dict:
     print("  3. 本检查不建立参数来源、现场测量精度或外部有效性证据。")
     print("=" * 80)
 
-    out_file = os.path.join(_THIS_DIR, "标定结果_PCB加工工时与换型时间物理模型参数.json")
+    out_dir = os.path.join(_PROJECT_ROOT, "result", "参数标定")
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "标定结果_PCB加工工时与换型时间物理模型参数.json")
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump({
             "target": "Physical Time Model and Setup Parameters",

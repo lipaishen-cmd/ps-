@@ -1,15 +1,4 @@
-"""
-validate_scope_limits.py
-========================
-【参数标定程序 1】
-标定对象：
-  1. 受影响域旧批次规模上限 K_scope（式 9）：检查作用域规模、扰动比例与选择器计算延迟；
-  2. 初始候选子集规模 K_seed 与队列紧邻闭包扩展（Queue Adjacency Closure）参数配比；
-  3. 参数域边界：K_scope = 0（不选择旧批次）与 K_scope >= |U_old|（纳入全部未冻结旧批次）。
-
-运行命令：
-  python validate_scope_limits.py
-"""
+"""受影响域规模上限 K_scope 与初始子集规模 K_seed 结构诊断。"""
 
 from __future__ import annotations
 
@@ -74,7 +63,7 @@ def calibrate_scope_parameters() -> Dict:
     print("【参数标定 1】受影响域规模上限 K_scope 与初始子集规模 K_seed 灵敏度标定")
     print("=" * 80)
 
-    scenario_path = os.path.join(_PROJECT_ROOT, "data", "dynamic_scenarios", "val", "scenario_val_000.xlsx")
+    scenario_path = os.path.join(_PROJECT_ROOT, "data", "dynamic_scenarios", "stage1", "val", "scenario_val_000.xlsx")
     init_orders, dyn_events = load_dynamic_orders_and_events(scenario_path, "Sheet1")
     pool_type = POOL_D
     machines_dict = {cfg["machine_id"]: Machine(**cfg) for cfg in MACHINE_CONFIGS if cfg["pool_type"] == pool_type}
@@ -160,7 +149,9 @@ def calibrate_scope_parameters() -> Dict:
     print("  3. 正式参数敏感性仍须在固定 Manifest、冻结检查点和多场景/多种子协议下重新执行。")
     print("=" * 80)
 
-    out_file = os.path.join(_THIS_DIR, "标定结果_受影响域规模上限K_scope与初始子集规模K_seed.json")
+    out_dir = os.path.join(_PROJECT_ROOT, "result", "参数标定")
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "标定结果_受影响域规模上限K_scope与初始子集规模K_seed.json")
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump({
             "target": "ScopeSelector Parameters",

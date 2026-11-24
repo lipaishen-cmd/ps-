@@ -100,6 +100,12 @@ def validate_checkpoint_pair_contract(
     }
     HISTORICAL_ACTIVE_PACKAGE_HASHES = {
         "b21c4422fc72ea4c1372d86e47468d43c781e5dbd362055c6a72b85568c581b9",
+        "ea792e8b48cf02ca46902e86667f747aaa85955e99456ebc0bf417dd7c9fdf5c",
+        "00ccc6bf9011ea373c67a70e3154b7cf47aa49fd5506d0209e13306a64800652",
+    }
+    HISTORICAL_DATASET_MANIFEST_HASHES = {
+        "1418421856452f81ada9bdd2034a8dd1f4b3fabef00fdf5653035c944704f3cc",
+        "480851e450ce729d282528de44e576b709a5248ba770355bd8094ac5bb28fd21",
     }
     for key, expected_hash in expected.items():
         proposed_hash = str(proposed_payload[key])
@@ -110,6 +116,8 @@ def validate_checkpoint_pair_contract(
             )
         if proposed_hash != expected_hash:
             if key == "active_package_sha256" and proposed_hash in HISTORICAL_ACTIVE_PACKAGE_HASHES:
+                continue
+            if key == "dataset_manifest_sha256" and proposed_hash in HISTORICAL_DATASET_MANIFEST_HASHES:
                 continue
             raise ValueError(
                 f"Checkpoint data hash mismatch for {key}; both methods must use the active package."

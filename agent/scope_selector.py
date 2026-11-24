@@ -49,18 +49,12 @@ class ScopeSelectionResult:
     stable_uids: frozenset[int]          # K_g^e: 稳定补集 (U_old \ A_g^e)
     unfrozen_old_uids: frozenset[int]    # U_{old,g}^e: 全部既有未开始旧批次
     new_order_ids: Tuple[str, ...]       # 新到达订单编号
-    stable_signature: Dict[int, Tuple]   # 稳定补集批次的刚性签名
+    stable_signature: Dict[int, Tuple]   # 稳定补集批次的结构签名
     scope_ratio: float                   # |A_g^e| / |U_old,g^e|
 
 
 def compute_stable_signature(solution: Solution, stable_uids: Iterable[int]) -> Dict[int, Tuple]:
-    """
-    计算稳定补集的刚性结构拓扑签名 (式 10 / 参数规范 1.6 节):
-    Sig_K^e(b) = (m_b, o(b), q_b, ρ_{K,m}(b))
-    其中 q_b ≡ b_ik 为子批叠板数，ρ_{K,m}(b) 为稳定补集子序列中的相对排名。
-    稳定补集锁定机台归属、订单、批次大小及稳定批次间的相对先后拓扑序；
-    其开工与完工绝对时间由统一解码器递推重算，不人为锁死原计划绝对时间。
-    """
+    """计算稳定补集的结构拓扑签名: (machine_id, order_id, stack_count, rel_pos)。"""
     wanted = set(stable_uids)
     sig: Dict[int, Tuple] = {}
     for mid, queue in solution.machine_queues.items():

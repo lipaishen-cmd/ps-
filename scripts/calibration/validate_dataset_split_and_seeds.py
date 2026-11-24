@@ -38,9 +38,9 @@ def validate_experimental_protocol() -> Dict[str, Any]:
     if not _ACTIVE_CONTRACT.is_file():
         raise FileNotFoundError(f"找不到活动数据合同：{_ACTIVE_CONTRACT}")
     contract = json.loads(_ACTIVE_CONTRACT.read_text(encoding="utf-8"))
-    expected = {"train": 18, "val": 6, "test": 6}
+    expected = {"train": 18, "val": 6, "test": 36}
     if contract.get("expected_scenarios") != expected:
-        raise ValueError("活动合同不满足当前三组 18/6/6 场景协议。")
+        raise ValueError("活动合同不满足当前三组 18/6/36 场景协议。")
     if contract.get("data_evidence_status") != "PRE_FORMAL_ONLY_PROXY_DATA":
         raise ValueError("活动合同必须保留 PRE_FORMAL_ONLY_PROXY_DATA 证据边界。")
 

@@ -1,15 +1,4 @@
-"""
-hppo_trainer.py
-===============
-双时间尺度层级近端策略优化训练器 HPPO（规范第 14 章、第 18.3 节第九阶段，Gate 10 核心执行体）
-
-功能说明：
-  1. 统一管理 HGNN 骨干特征提取器、Manager/Worker 两个独立策略网络与共享 Critic 价值网络。
-  2. 驱动 DynamicEventManager 执行动态插单轨迹采样，维护事务隔离的双 RolloutBuffer。
-  3. 执行半MDP跳步 GAE 与微观单步 GAE 优势计算。
-  4. 联合反向传播更新两级 PPO 裁剪损失、价值函数损失与动作熵正则。
-  5. 提供模型权重保存、加载与训练收敛性监控接口。
-"""
+"""双时间尺度层级近端策略优化训练器 HPPO。"""
 
 from __future__ import annotations
 
@@ -57,8 +46,8 @@ FORMAL_DYNAMIC_LR = FORMAL_DYNAMIC_SPLIT_LR
 FORMAL_DYNAMIC_REWARD_SCALE = 10.0
 FORMAL_DYNAMIC_C_ENT = 0.0015
 DUAL_ACTOR_LR_CONTRACT_VERSION = "split3e-4-placement1p5e-4-v20261106"
-DUAL_ACTOR_SEMANTICS_VERSION = "dual-actor-sequential-template10-placementlr-v20261106"
-MAIN_CHECKPOINT_FORMAT_VERSION = 7
+DUAL_ACTOR_SEMANTICS_VERSION = "dual-actor-sequential-template10-placementlr-dualtower-workerterminal-v20261119"
+MAIN_CHECKPOINT_FORMAT_VERSION = 8
 
 
 class HPPOTrainer:
@@ -199,8 +188,9 @@ class HPPOTrainer:
                 # DynamicTwoAgentRunner 已按 reward_scale 完成一次且仅一次归一化。
                 scaled_reward = float(decision.reward)
                 n_wr = len(decision.worker_records)
-                # Worker 单步微观奖励严格依据式 (31) 与参数规范 5.1 节：
-                # 使用每步临时放置后实时解码的局部增量 ΔC_m 与当前状态 makespan
+                # Worker 前置单步微观奖励严格依据式 (31) 与参数规范 5.1 节：
+                # 使用每步临时放置后实时解码的局部增量 ΔC_m 与当前状态 makespan；
+                # 事件最后一步微观放置则在提交事务时额外叠加事件全局终局奖励 decision.reward (R_e^S)
                 for idx, record in enumerate(decision.worker_records):
                     if "step_reward" not in record:
                         raise RuntimeError("Formal Placement transition is missing reward.py step_reward.")
@@ -223,7 +213,10 @@ class HPPOTrainer:
                         done=step_done,
                         order_id=record.get("order_id"),
                     )
-                self.worker_buffer.commit_transaction(done=is_last_event)
+                self.worker_buffer.commit_transaction(
+                    done=is_last_event,
+                    terminal_reward=scaled_reward,
+                )
                 n_mr = len(decision.manager_records)
                 for idx_m, manager_record in enumerate(decision.manager_records):
                     m_done = is_last_event and (idx_m == n_mr - 1)
@@ -320,9 +313,7 @@ class HPPOTrainer:
         if n_m == 0 and n_w == 0:
             return {}
 
-        # ------------------------------------------------------------------
         # 1. 预处理：优势函数标准化与张量准备
-        # ------------------------------------------------------------------
         if n_m > 0:
             self.manager_buffer.compute_returns_and_advantages(last_val=0.0)
             m_advs = torch.tensor(self.manager_buffer.advantages, dtype=torch.float32, device=self.device)
@@ -343,9 +334,7 @@ class HPPOTrainer:
             w_actions = torch.tensor(self.worker_buffer.actions, dtype=torch.long, device=self.device)
             old_log_probs_w = torch.stack([lp.to(self.device) for lp in self.worker_buffer.log_probs])
 
-        # ------------------------------------------------------------------
-        # 2. 多 Epoch Mini-Batch PPO 联合更新循环 (对齐顶刊 SGD 范式)
-        # ------------------------------------------------------------------
+        # 2. 多 Epoch Mini-Batch PPO 更新循环
         last_metrics: Dict[str, float] = {}
         m_batch_size = max(4, min(64, n_m)) if n_m > 0 else 1
         w_batch_size = max(8, min(64, n_w)) if n_w > 0 else 1
@@ -530,8 +519,7 @@ class HPPOTrainer:
 
                     loss_wb_policy = loss_wb_policy / wb_size
                     loss_wb_ent = loss_wb_ent / wb_size
-                    # 引入 Worker Policy 熵下限自适应保护：
-                    # 动态监控 Worker Entropy，若 H < 1.5，提供高刚性惩罚推力，强行阻止匹配网络过早陷入局部死锁与确定性硬选择
+                    # Worker 熵下限自适应调节：H < 1.5 时提高熵正则系数以防止策略过早收敛
                     worker_ent_val = -loss_wb_ent.item()
                     if worker_ent_val < 1.5:
                         adaptive_c_ent = max(self.c_ent, self.c_ent * (1.5 / max(1e-4, worker_ent_val)), 0.005 * (1.5 - worker_ent_val))

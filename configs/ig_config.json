@@ -1,0 +1,17 @@
+{
+  "schema": "pcb_event_ig_v1",
+  "restart_seeds": [1, 2, 3],
+  "budgets": ["10x", "5s"],
+  "fixed_budget_s": 5.0,
+  "main_time_multiplier": 10.0,
+  "temperature_ratio": 0.01,
+  "destroy_count": 2,
+  "p_split": 0.2,
+  "max_partition_templates": 16,
+  "commit_reserve_s": 0.01,
+  "k_seed": 5,
+  "k_scope": 8,
+  "delta_k": 4,
+  "sheet_name": "Sheet1",
+  "cpu_threads": 1
+}

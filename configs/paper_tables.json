@@ -1,0 +1,28 @@
+{
+  "schema": "paper_tables_v1",
+  "tie_tolerance_min": 0.1,
+  "display_decimals": 2,
+  "stages": [1, 2, 3],
+  "formal_seeds": [1, 2, 3],
+  "rules": ["S_BASE", "FIFO", "SPT", "LPT", "EDD", "ECT"],
+  "main_method": "AD-HG-DAPPO",
+  "ablation_method": "AD-HG-SAPPO",
+  "remove_undefined_cross_stage_ablation": true,
+  "sheet_name": "Sheet1",
+  "cpu_threads": 1,
+  "k_seed": 5,
+  "k_scope": 8,
+  "delta_k": 4,
+  "max_partition_templates": 16,
+  "checkpoints": {
+    "AD-HG-DAPPO": "result/主算法/stage{stage}/seed_{seed}/stage{stage}_best.pt",
+    "AD-HG-SAPPO": "result/消融实验/stage{stage}/seed_{seed}/stage{stage}_best.pt"
+  },
+  "train_logs": {
+    "AD-HG-DAPPO": "result/主算法/stage{stage}/seed_{seed}/stage{stage}_train_log.json",
+    "AD-HG-SAPPO": "result/消融实验/stage{stage}/seed_{seed}/stage{stage}_train_log.json"
+  },
+  "authoritative_csv_path": "result/综合对比/seed_{seed}/三阶段_调度规则_消融模型全量对比.csv",
+  "authoritative_json_path": "result/综合对比/seed_{seed}/三阶段_调度规则_消融模型全量对比.json",
+  "output_root": "result/数据核查与自动出表"
+}

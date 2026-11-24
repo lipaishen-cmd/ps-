@@ -1,0 +1,17 @@
+{
+  "schema": "scope_ablation_v1",
+  "scope_labels": ["zero", "default", "full_tail"],
+  "methods": ["AD-HG-DAPPO", "S_BASE"],
+  "default_k_scope": 8,
+  "default_k_seed": 5,
+  "delta_k": 4,
+  "full_tail_sentinel": 1000000,
+  "max_partition_templates": 16,
+  "sheet_name": "Sheet1",
+  "cpu_threads": 1,
+  "checkpoints": {
+    "1": "result/主算法/stage1/seed_1/stage1_best.pt",
+    "2": "result/主算法/stage2/seed_1/stage2_best.pt",
+    "3": "result/主算法/stage3/seed_1/stage3_best.pt"
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "status": "IMPLEMENTED_PCB_ADAPTATIONS_NOT_EXACT_PAPER_REPRODUCTIONS",
+ "authority": "current code, explicitly authorized by user on 2026-11-22",
+ "method_ids": {
+  "am_a2c": "AM-A2C-PCB",
+  "transformer_a3c": "TRANSFORMER-A3C-PCB",
+  "etdqn": "ETDQN-PCB",
+  "iddqn": "ATTENTION-DDQN-PCB"
+ },
+ "protocol_alignment": {
+  "hidden_width": 32,
+  "hidden_width_note": "Aligned with AD-HG-DAPPO main trainer default and trained checkpoints (d_h=32).",
+  "default_device": "cuda when torch.cuda.is_available() else cpu",
+  "default_episodes": 1800,
+  "default_validate_every": 10,
+  "matched_simulation_budget": "In --budget-mode matched_sim (default), ETDQN episodes scale by 1/(1 + ga_population * ga_generations) for approximately matched event simulation budget. Actual counts can differ due to failed teacher trials and must be reported from train.csv.",
+  "resume_supported": true
+ },
+ "paper_boundary_statement": "为统一动作空间与物理约束，本文参考 AM-A2C、Transformer-A3C、ETDQN 及注意力增强 DDQN 的表征与更新机制，在相同的 PCB 分批—放置双阶段决策框架、合法动作掩码和标量奖励下构建适配基线（分别记作 AM-A2C-PCB、TRANSFORMER-A3C-PCB、ETDQN-PCB 和 ATTENTION-DDQN-PCB）。",
+ "am_a2c": {"paper":"10.1016/j.future.2026.108507","retained":"attention, A2C, feasible action mutation","changed":"PCB typed entity attention and two sequential decisions; mutation uses explicit mixture likelihood; original cloud objective removed","missing":"full original implementation and formula-by-formula mutation audit"},
+ "transformer_a3c":{"paper":"10.1007/s00607-026-01664-7","retained":"causal history Transformer, asynchronous local gradients","changed":"PCB categorical split and placement; episode n-step rollout; central Adam gradient delivery","missing":"full original temporal feature/rollout hyperparameter equivalence"},
+ "etdqn":{"paper":"10.1109/TEVC.2024.3367181","retained":"evolutionary simulator teacher and fixed Q regression targets without target network bootstrapping","changed":"direct candidate action tape GA; current-event return teacher replaces original genetic encoding and evaluation; attention encoder","missing":"paper-equivalent genetic representation, state evaluator and rule-selector reproduction"},
+ "iddqn":{"paper":"10.3390/pr13041246","publication_name_note":"The paper does not name its method IDDQN-II; internal key 'iddqn' is retained only for checkpoint compatibility.","retained":"attention, decoupled decision components, Double Q selection/evaluation","changed":"single common PCB objective replaces multiobjective adaptive weighting; direct template and slot scoring replaces original rules","missing":"original multiobjective adaptive weights and exact action-decoupling architecture"},
+ "claim_allowed":"Comparing four explicitly described PCB method adaptations (AM-A2C-PCB, TRANSFORMER-A3C-PCB, ETDQN-PCB, ATTENTION-DDQN-PCB) under a common environment and approximately matched, explicitly audited simulation budgets",
+ "claim_forbidden":"Exact original paper reproduction; proven dual-Actor superiority; equivalent training compute without budget audit",
+ "formal_release_requirements":["review full-paper differences", "record equal tuning trials on validation only", "freeze training schedule and environment-call/compute budgets including GA trials", "run all five seeds on matched panels", "report all failures and paired confidence intervals"]
+}

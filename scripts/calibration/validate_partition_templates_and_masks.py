@@ -1,19 +1,4 @@
-"""
-validate_partition_templates_and_masks.py
-===========================================
-【结构诊断程序 3】
-诊断对象：
-  1. 宏观分批策略（ManagerPolicy / SplitPolicy）整数拆分候选模板上限 N_max = 16 的空间分布与完备性；
-  2. 模板三级截断准则有效性：子批数升序（最小化换型频次）-> 首批容量降序（主轴满载优先）-> 字典序；
-  3. 微观机台指派策略（WorkerPolicy / PlacementPolicy）硬约束动作掩码：
-     - 机台加工资格硬约束
-     - 主轴容量上限硬约束（B_b <= C_m）
-     - 资源池物理隔离硬约束（Pool D vs Pool B）
-     确保非法插槽 Softmax 采样概率严格为零。
-
-运行命令：
-  python validate_partition_templates_and_masks.py
-"""
+"""分批候选模板上限 N_max 与机台指派动作掩码结构诊断。"""
 
 from __future__ import annotations
 
@@ -142,7 +127,9 @@ def calibrate_templates_and_masks() -> Dict:
     print("  3. 正式参数敏感性须用冻结数据、冻结检查点和多种子评测完成。")
     print("=" * 80)
 
-    out_file = os.path.join(_THIS_DIR, "标定结果_分批候选模板上限N_max与机台指派动作空间掩码.json")
+    out_dir = os.path.join(_PROJECT_ROOT, "result", "参数标定")
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "标定结果_分批候选模板上限N_max与机台指派动作空间掩码.json")
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump({
             "target": "N_max and Placement Action Masks",

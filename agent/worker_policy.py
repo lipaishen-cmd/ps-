@@ -1,14 +1,4 @@
-"""
-worker_policy.py
-================
-下层微观子批插槽决策策略网络 WorkerPolicy（规范第 9 章、第 18.4 节 Gate 8 核心执行体）
-
-功能说明：
-  1. 基于待排子批表征 h_b 与全部候选插槽表征 h_l 计算匹配评分。
-  2. 施加微观动作掩码 M^A：屏蔽机型不兼容或越界的非法 (m, l) 插槽。
-  3. 通过 Softmax 输出微观指派概率分布 pi^A(a_t | s_t^A)。
-  4. 确保非法插槽动作的选择概率置为 0.0。
-"""
+"""下层子批插槽指派策略网络 WorkerPolicy，输出满足约束的候选插槽概率分布。"""
 
 from __future__ import annotations
 
@@ -23,7 +13,7 @@ import torch.nn.functional as F
 
 class WorkerPolicy(nn.Module):
     """
-    Worker 机器-插槽决策策略网络。
+    Worker 机器-插槽决策策略网络（双塔投影相加 + Tanh 激活，与 Manager/SingleActor 结构对齐）。
     """
 
     def __init__(
@@ -33,9 +23,10 @@ class WorkerPolicy(nn.Module):
         d_hidden: int = 64,
     ):
         super().__init__()
-        self.matcher = nn.Sequential(
-            nn.Linear(d_batch + d_slot, d_hidden),
-            nn.ReLU(),
+        self.batch_proj = nn.Linear(d_batch, d_hidden)
+        self.slot_proj = nn.Linear(d_slot, d_hidden)
+        self.head = nn.Sequential(
+            nn.Tanh(),
             nn.Linear(d_hidden, d_hidden),
             nn.ReLU(),
             nn.Linear(d_hidden, 1),
@@ -64,9 +55,14 @@ class WorkerPolicy(nn.Module):
         if n_slots == 0:
             raise ValueError("No slots provided to WorkerPolicy!")
 
-        b_exp = h_batch.expand(n_slots, -1)
-        pairs = torch.cat([b_exp, h_slots], dim=-1)
-        raw_logits = self.matcher(pairs).squeeze(-1) # [N_slots]
+        if h_batch.is_inference():
+            h_batch = h_batch.clone()
+        if h_slots.is_inference():
+            h_slots = h_slots.clone()
+
+        batch_emb = self.batch_proj(h_batch).expand(n_slots, -1)
+        slot_emb = self.slot_proj(h_slots)
+        raw_logits = self.head(batch_emb + slot_emb).squeeze(-1) # [N_slots]
 
         # 施加微观硬掩码
         valid_set = set(valid_slots)

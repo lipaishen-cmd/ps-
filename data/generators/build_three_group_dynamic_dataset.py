@@ -16,7 +16,7 @@ from scenario serial numbers alone:
   earlier/burstier arrivals, and a higher urgent-order proportion.
 
 The resulting split is 18/6/6.  Each split contains the same three groups:
-six training scenarios and two validation/test scenarios per group.
+six training scenarios, two validation scenarios, and two test scenarios per group.
 """
 
 from __future__ import annotations
@@ -113,6 +113,7 @@ class ScenarioSpec:
     initial_orders: int
     dynamic_events: int
     arrival_pattern: str
+    seed: int
 
 
 GROUPS: Dict[str, GroupProfile] = {
@@ -160,36 +161,73 @@ def _specifications() -> List[ScenarioSpec]:
     # Table 20 parameter specifications: Small |O| in [14, 18], Medium |O| in [28, 36], Large |O| in [42, 54]
     groups = {
         "G1_SMALL_LOW_LOAD": {
-            "train": [(14, 5), (15, 5), (16, 6), (17, 6), (18, 7), (20, 7)],
-            "val": [(16, 6), (18, 7)],
-            "test": [(17, 6), (18, 7)],
+            "train": [
+                (0, 14, 5, "uniform", 2026102700),
+                (1, 15, 5, "poisson", 2026102701),
+                (2, 16, 6, "uniform", 2026102702),
+                (3, 17, 6, "poisson", 2026102703),
+                (4, 18, 7, "uniform", 2026102704),
+                (5, 20, 7, "poisson", 2026102705),
+            ],
+            "val": [
+                (0, 16, 6, "uniform", 2026102718),
+                (1, 18, 7, "poisson", 2026102719),
+            ],
+            "test": [
+                (0, 17, 6, "uniform", 2026102724),
+                (1, 18, 7, "poisson", 2026102725),
+            ],
         },
         "G2_MEDIUM_MIXED_LOAD": {
-            "train": [(28, 10), (29, 10), (30, 11), (32, 11), (34, 12), (36, 12)],
-            "val": [(30, 11), (36, 13)],
-            "test": [(32, 11), (36, 13)],
+            "train": [
+                (6, 28, 10, "uniform", 2026102706),
+                (7, 29, 10, "poisson", 2026102707),
+                (8, 30, 11, "burst", 2026102708),
+                (9, 32, 11, "uniform", 2026102709),
+                (10, 34, 12, "poisson", 2026102710),
+                (11, 36, 12, "burst", 2026102711),
+            ],
+            "val": [
+                (2, 30, 11, "uniform", 2026102720),
+                (3, 36, 13, "poisson", 2026102721),
+            ],
+            "test": [
+                (2, 32, 11, "uniform", 2026102726),
+                (3, 36, 13, "poisson", 2026102727),
+            ],
         },
         "G3_LARGE_HIGH_LOAD": {
-            "train": [(44, 16), (45, 17), (46, 18), (48, 18), (50, 19), (52, 20)],
-            "val": [(46, 18), (50, 20)],
-            "test": [(48, 19), (52, 20)],
+            "train": [
+                (12, 44, 16, "burst", 2026102712),
+                (13, 45, 17, "poisson", 2026102713),
+                (14, 46, 18, "burst", 2026102714),
+                (15, 48, 18, "poisson", 2026102715),
+                (16, 50, 19, "burst", 2026102716),
+                (17, 52, 20, "poisson", 2026102717),
+            ],
+            "val": [
+                (4, 46, 18, "burst", 2026102722),
+                (5, 50, 20, "poisson", 2026102723),
+            ],
+            "test": [
+                (4, 48, 19, "burst", 2026102728),
+                (5, 52, 20, "poisson", 2026102729),
+            ],
         },
     }
     specs: List[ScenarioSpec] = []
     for split in ("train", "val", "test"):
-        sequence = 0
         for group_id in GROUPS:
-            profile = GROUPS[group_id]
-            for local_idx, (initial_count, event_count) in enumerate(groups[group_id][split]):
+            for sequence, initial_count, event_count, pattern, seed in groups[group_id][split]:
                 specs.append(ScenarioSpec(
                     split=split,
                     group_id=group_id,
                     sequence=sequence,
                     initial_orders=initial_count,
                     dynamic_events=event_count,
-                    arrival_pattern=profile.arrival_patterns[local_idx % len(profile.arrival_patterns)],
+                    arrival_pattern=pattern,
+                    seed=seed,
                 ))
-                sequence += 1
     return specs
 
 
@@ -462,8 +500,8 @@ def _write_scenario(
         "initial_orders": spec.initial_orders,
         "dynamic_events": spec.dynamic_events,
         "cmax_reference": cmax_reference,
-        "relative_path": f"{spec.split}/{scenario_id}.xlsx",
-        "filepath": f"{spec.split}/{scenario_id}.xlsx",
+        "relative_path": f"stage{list(GROUPS).index(profile.group_id) + 1}/{spec.split}/{scenario_id}.xlsx",
+        "filepath": f"stage{list(GROUPS).index(profile.group_id) + 1}/{spec.split}/{scenario_id}.xlsx",
         "sha256": _sha256(output_path),
         "validation_status": "PASS",
         "order_feature_summary": {
@@ -542,6 +580,8 @@ def _validate_group_panel(manifest: Dict[str, Any]) -> None:
 def build_active_dataset(project_root: Path) -> Dict[str, Any]:
     """Directly replace the active scenario files and manifest with the 3-group panel."""
     source_path = project_root / SOURCE_WORKBOOK
+    if not source_path.is_file():
+        source_path = project_root / "data" / "test_samples" / SOURCE_WORKBOOK
     dataset_dir = project_root / DATASET_RELATIVE_PATH
     eligibility_path = project_root / ELIGIBILITY_POLICY_RELATIVE_PATH
     if not eligibility_path.is_file():
@@ -554,16 +594,16 @@ def build_active_dataset(project_root: Path) -> Dict[str, Any]:
     p20, p40, p60, p80 = (_quantile(workloads, p) for p in (0.20, 0.40, 0.60, 0.80))
     records: List[Dict[str, Any]] = []
     specs = _specifications()
-    for offset, spec in enumerate(specs):
+    for spec in specs:
         profile = GROUPS[spec.group_id]
-        rng = random.Random(2026102700 + offset)
+        rng = random.Random(spec.seed)
         selected = _select_orders(
             rng, source_records, profile, spec.initial_orders + spec.dynamic_events, p20, p40, p60, p80,
         )
-        destination = dataset_dir / spec.split / f"scenario_{spec.split}_{spec.sequence:03d}.xlsx"
+        destination = dataset_dir / f"stage{list(GROUPS).index(spec.group_id) + 1}" / spec.split / f"scenario_{spec.split}_{spec.sequence:03d}.xlsx"
         destination.parent.mkdir(parents=True, exist_ok=True)
         records.append(_write_scenario(
-            destination, selected, spec, profile, seed=2026102700 + offset,
+            destination, selected, spec, profile, seed=spec.seed,
             upper_workload_threshold=p60,
         ))
 

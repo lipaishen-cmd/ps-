@@ -44,9 +44,7 @@ for _p in [
 from configs.experiment_protocol import FORMAL_SEED_COUNT
 
 
-# =====================================================================
 # 1. Rule Decision Contract
-# =====================================================================
 
 _SHARED_PHYSICS = {
     "active_manifest": True,
@@ -96,9 +94,7 @@ def comparison_contract() -> Dict[str, Any]:
     }
 
 
-# =====================================================================
 # 2. Rule Configuration & Manifest Plans
-# =====================================================================
 
 @dataclass(frozen=True)
 class CurriculumPlan:

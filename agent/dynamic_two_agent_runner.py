@@ -65,6 +65,7 @@ class DynamicDecision:
     manager_records: List[dict] = field(default_factory=list)
     partition_plan: Dict[str, Tuple[int, ...]] = field(default_factory=dict)
     worker_records: List[dict] = field(default_factory=list)
+    chronological_records: List[Tuple[str, dict]] = field(default_factory=list)
     reward: float = 0.0
     cmax_before: float = 0.0
     cmax_after: Optional[float] = None
@@ -486,13 +487,14 @@ class DynamicTwoAgentRunner:
         context: DynamicRescheduleContext,
         new_order: Order,
         deterministic: bool,
-    ) -> Tuple[Optional[Solution], Dict[str, Tuple[int, ...]], List[dict], List[Tuple[str, int]], List[float], List[dict], List[str]]:
+    ) -> Tuple[Optional[Solution], Dict[str, Tuple[int, ...]], List[dict], List[Tuple[str, int]], List[float], List[dict], List[Tuple[str, dict]], List[str]]:
         tx = self.manager.begin_progressive_reallocation(context)
         plan: Dict[str, Tuple[int, ...]] = {}
         manager_records: List[dict] = []
         actions: List[Tuple[str, int]] = []
         log_probs: List[float] = []
         worker_records: List[dict] = []
+        chronological_records: List[Tuple[str, dict]] = []
         errors: List[str] = []
         last_builder: Optional[PCBGraphBuilder] = None
         last_frontier_idx = 0
@@ -513,14 +515,17 @@ class DynamicTwoAgentRunner:
             errors.extend(opt_errors)
             if opt_errors:
                 tx.rollback()
-                return None, plan, manager_records, actions, log_probs, worker_records, errors
+                return None, plan, manager_records, actions, log_probs, worker_records, chronological_records, errors
             tx.decode_partial()
             manager_record["tau"] = len(worker_records) - option_start
             if manager_record["tau"] <= 0:
                 tx.rollback()
                 errors.append(f"订单 {order.order_id} 的 Split Option 未产生 Placement 转移。")
-                return None, plan, manager_records, actions, log_probs, worker_records, errors
+                return None, plan, manager_records, actions, log_probs, worker_records, chronological_records, errors
             manager_records.append(manager_record)
+            chronological_records.append(("split", manager_record))
+            for rec in opt_records:
+                chronological_records.append(("placement", rec))
             last_builder, last_frontier_idx = builder, frontier_idx
 
         _, tail_end = tx.append_remaining_fixed_batches()
@@ -539,16 +544,18 @@ class DynamicTwoAgentRunner:
             errors.extend(tail_errors)
             if tail_errors:
                 tx.rollback()
-                return None, plan, manager_records, actions, log_probs, worker_records, errors
+                return None, plan, manager_records, actions, log_probs, worker_records, chronological_records, errors
             tx.decode_partial()
             if manager_records:
                 manager_records[-1]["tau"] += len(tail_records)
+            for rec in tail_records:
+                chronological_records.append(("placement", rec))
 
         committed, candidate, _ = tx.commit()
         if not committed:
             errors.append("渐进 OptionTransaction 解码或覆盖校验失败。")
-            return None, plan, manager_records, actions, log_probs, worker_records, errors
-        return candidate, plan, manager_records, actions, log_probs, worker_records, errors
+            return None, plan, manager_records, actions, log_probs, worker_records, chronological_records, errors
+        return candidate, plan, manager_records, actions, log_probs, worker_records, chronological_records, errors
 
     def run_next_event(
         self,
@@ -600,6 +607,7 @@ class DynamicTwoAgentRunner:
                     actions,
                     worker_log_probs,
                     worker_records,
+                    chronological_records,
                     worker_errors,
                 ) = self._run_sequential_options(curr_ctx, order, deterministic)
                 decision.partition_plan = dict(partition_plan)
@@ -616,6 +624,7 @@ class DynamicTwoAgentRunner:
                 decision.worker_actions = actions
                 decision.worker_log_probs = worker_log_probs
                 decision.worker_records = worker_records
+                decision.chronological_records = chronological_records
                 decision.errors.extend(worker_errors)
             except Exception as exc:
                 decision.errors.append(f"两个 Actor 自主生成候选解失败: {exc}")

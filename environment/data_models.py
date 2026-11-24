@@ -1,17 +1,6 @@
-"""
-data_models.py
-==============
-统一核心数据对象定义（规范第 4 章、第 8 章、第 11.3 节）
-所有模块必须通过此文件中的类型进行数据传递，禁止自行定义并行数据结构。
+"""PCB 钻孔调度核心数据对象与车间物理常量定义。
 
-层级对应关系（规范 5.1 节）：
-  第一层: PANEL 需求量 Q_i
-  第二层: 最大叠片层数 ML_i，物理叠板单元数 S_i = ceil(Q_i / ML_i)
-  第三层: 执行子批 b_ik（其 stack_count 为占用主轴数）
-  第四层: 机床主轴容量 P_m
-
-在当前数据结构中，Order.S 存储 ML_i，Order.W 存储 S_i；字段名不是
-数学符号的重新定义，任何新增代码均应以这一映射解释。
+Order.S 存储最大叠片层数 ML_i，Order.W 存储物理叠板单元数 S_i = ceil(Q_i / ML_i)。
 """
 
 from __future__ import annotations
@@ -20,9 +9,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-# ---------------------------------------------------------------------------
-# 全局常量（规范 2.2 节，冻结不可修改）
-# ---------------------------------------------------------------------------
+# 全局常量
 
 POOL_D = "Pool_D"   # 普通钻孔池
 POOL_B = "Pool_B"   # 专用背钻池
@@ -130,9 +117,7 @@ def _same_optional_time(left: Optional[float], right: Optional[float]) -> bool:
     return math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=1e-9)
 
 
-# ---------------------------------------------------------------------------
 # 数据类定义
-# ---------------------------------------------------------------------------
 
 @dataclass
 class Order:

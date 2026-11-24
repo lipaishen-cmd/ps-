@@ -1,21 +1,4 @@
-"""
-batch_scenario_generator.py
-===========================
-批量动态调度场景生成器（支持训练集/验证集/测试集体系化生成）
-
-功能说明：
-  1. 读取源 Excel 文件（test_1.xlsx / test_2.xlsx 等），不修改源文件。
-  2. 多维度受控生成：
-     - 插单时刻：支持相对初始 Cmax 比例（如 0.08~0.75）或绝对时间区间；
-       支持均匀分布 (uniform)、泊松/指数间隔到达 (poisson)、脉冲突发到达 (burst)。
-     - 插单规模：支持轻量 (1~3单)、中量 (4~7单)、重量 (8~12单) 等离散档位或自定义范围；
-       工艺参数真实符合正整数要求与物理关系 D1: W = ceil(Q / S)。
-     - 优先级分布：高 / 中 / 普通，支持自定义权重分布（均衡/高急/常态）。
-     - 预报误差形态：准时 (on-time)、早到 (early)、晚到 (delayed)、突发未预报 (unforecasted)。
-  3. 双资源池隔离与工步匹配：普通钻孔订单限制 Pool D，背钻订单限制 Pool B。
-  4. 自动全量运行 dynamic_validator.validate_dynamic_excel 自检，确保 100% 合规。
-  5. 批量生成 train / val / test 数据集与 dataset_manifest.json 元数据清单。
-"""
+"""批量动态调度场景生成器（支持 train/val/test 划分与 manifest 生成）。"""
 
 from __future__ import annotations
 
@@ -72,9 +55,7 @@ from eligibility_builder import (
 )
 
 
-# ---------------------------------------------------------------------------
-# 样式定义常量
-# ---------------------------------------------------------------------------
+# 样式常量
 _FONT_HEADER = Font(name="Microsoft YaHei", size=11, bold=True, color="1F497D")
 _FONT_DATA = Font(name="Microsoft YaHei", size=10)
 _FILL_INITIAL_NEW = PatternFill(start_color="EDF2F8", end_color="EDF2F8", fill_type="solid")
@@ -108,9 +89,7 @@ DYNAMIC_HEADERS = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # 配置类定义
-# ---------------------------------------------------------------------------
 
 @dataclass
 class ForecastErrorConfig:
@@ -174,9 +153,7 @@ class ScenarioConfig:
                 raise ValueError(f"未知优先级: {p}")
 
 
-# ---------------------------------------------------------------------------
 # 估算辅助函数
-# ---------------------------------------------------------------------------
 
 def estimate_sheet_makespan(ws: openpyxl.worksheet.worksheet.Worksheet) -> float:
     """
@@ -210,12 +187,10 @@ def estimate_sheet_makespan(ws: openpyxl.worksheet.worksheet.Worksheet) -> float
     return max(300.0, est_cmax)
 
 
-# ---------------------------------------------------------------------------
-# 核心生成器类
-# ---------------------------------------------------------------------------
+# 生成器类
 
 class DynamicScenarioGenerator:
-    """动态场景生成引擎"""
+    """动态场景生成器。"""
 
     def __init__(self, src_excel: str):
         self.src_excel = os.path.abspath(src_excel)
@@ -580,9 +555,7 @@ class DynamicScenarioGenerator:
         }
 
 
-# ---------------------------------------------------------------------------
 # 数据集批量生成接口
-# ---------------------------------------------------------------------------
 
 # The formal dynamic experiment is fixed to V20261027.  These values prevent
 # accidental recreation of the retired 10/3/5 split when this generic helper is
@@ -721,9 +694,7 @@ def generate_dynamic_dataset(
     return manifest
 
 
-# ---------------------------------------------------------------------------
 # CLI 入口
-# ---------------------------------------------------------------------------
 
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build the candidate-only CLI and expose its defaults to regression tests."""

@@ -1,14 +1,4 @@
-"""
-atomic_transaction.py
-=====================
-调度原子事务管理器（规范第 10 章、第 18.2 节冻结项 3 & 4）
-
-功能说明：
-  1. 封装上层拆批 Option 及其衍生出的下层子批指派动作，提供事务级调度操作。
-  2. 提供状态深克隆、试探插入、规范化校验与最早开工工期试算接口。
-  3. 支持事务提交（Commit）与回滚（Rollback），避免产生不完整中间状态。
-  4. 维护临时采样轨迹，未完成的尝试与无效解不写入 PPO Rollout Buffer。
-"""
+"""调度原子事务管理器，提供状态快照、试探指派、提交与回滚接口。"""
 
 from __future__ import annotations
 
@@ -70,7 +60,7 @@ class OptionTransaction:
             for q in template
         ]
 
-        # 3. 事务内临时轨迹（与 PPO 经验池严格物理隔离）
+        # 事务内临时轨迹（与 PPO 经验池隔离）
         self.temporary_worker_trajectory: List[dict] = []
         self.current_batch_idx = 0
         self.is_finalized = False
@@ -241,9 +231,7 @@ class OptionTransaction:
         return True, self.snapshot, committed_traj
 
     def rollback(self) -> Solution:
-        """
-        原子回滚事务：物理清空临时轨迹，彻底销毁快照，恢复事务前基准解。
-        """
+        """回滚事务：清空临时轨迹并恢复事务前基准解。"""
         self.is_finalized = True
         self.is_rolled_back = True
         self.temporary_worker_trajectory.clear()

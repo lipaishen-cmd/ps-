@@ -1,16 +1,4 @@
-"""
-run_validation_suite.py
-=======================
-【全系统参数诊断统一执行入口】
-功能说明：
-  1. 自动化顺次调度当前 5 项配置/结构/协议诊断子程序；
-  2. 捕获各子程序的执行状态码与输出日志；
-  3. 整合诊断执行报告；
-  4. 明确区分“脚本可执行/合同一致”与“性能、统计、现场有效性已验证”。
-
-运行命令：
-  python run_validation_suite.py
-"""
+"""配置、结构与协议诊断统一执行入口。"""
 
 from __future__ import annotations
 
@@ -24,6 +12,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_THIS_DIR, "..", ".."))
+_CALIBRATION_OUT_DIR = os.path.join(_PROJECT_ROOT, "result", "参数标定")
 
 SCRIPTS_IN_ORDER = [
     ("程序 1 (受影响域)", "validate_scope_limits.py"),
@@ -104,7 +94,8 @@ def run_all_calibrations():
         print("\n【警告】部分参数标定程序未能通过，请审查对应子程序日志！")
 
     # 汇总落盘
-    summary_file = os.path.join(_THIS_DIR, "全体系核心参数标定与确定性验证总报告.json")
+    os.makedirs(_CALIBRATION_OUT_DIR, exist_ok=True)
+    summary_file = os.path.join(_CALIBRATION_OUT_DIR, "全体系核心参数标定与确定性验证总报告.json")
     with open(summary_file, "w", encoding="utf-8") as f:
         json.dump({
             "title": "Configuration, Structural and Protocol Diagnostic Report",

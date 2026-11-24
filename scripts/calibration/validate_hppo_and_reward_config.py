@@ -97,7 +97,9 @@ def validate_hppo_configuration_contract() -> Dict[str, Any]:
 
 def main() -> int:
     result = validate_hppo_configuration_contract()
-    out_file = THIS_DIR / "标定结果_HPPO超参数与奖励函数缩放因子.json"
+    out_dir = PROJECT_ROOT / "result" / "参数标定"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "标定结果_HPPO超参数与奖励函数缩放因子.json"
     out_file.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     print(f"配置合同诊断已记录至：{out_file}")

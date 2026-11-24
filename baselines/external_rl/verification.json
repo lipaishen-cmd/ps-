@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-22",
+  "package": "C:\\Users\\Administrator\\OneDrive\\Desktop\\pcb新\\02_双Actor_PPO_动态重调度论文项目\\baselines\\external_rl",
+  "shared_files_unchanged": true,
+  "integration_checks": [
+    {
+      "method": "am_a2c",
+      "training_episodes": 1,
+      "training_events": 5,
+      "training_successes": 1,
+      "validation_successes": 2,
+      "validation_total": 2,
+      "teacher_simulations": 0,
+      "asynchronous_staleness": []
+    },
+    {
+      "method": "transformer_a3c",
+      "training_episodes": 2,
+      "training_events": 10,
+      "training_successes": 2,
+      "validation_successes": 2,
+      "validation_total": 2,
+      "teacher_simulations": 0,
+      "asynchronous_staleness": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "method": "etdqn",
+      "training_episodes": 1,
+      "training_events": 5,
+      "training_successes": 1,
+      "validation_successes": 2,
+      "validation_total": 2,
+      "teacher_simulations": 40,
+      "asynchronous_staleness": []
+    },
+    {
+      "method": "iddqn",
+      "training_episodes": 1,
+      "training_events": 5,
+      "training_successes": 1,
+      "validation_successes": 2,
+      "validation_total": 2,
+      "teacher_simulations": 0,
+      "asynchronous_staleness": []
+    }
+  ],
+  "tests": [
+    {
+      "command": [
+        "-m",
+        "unittest",
+        "baselines.external_rl.tests.test_contracts",
+        "-v"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "passed": true,
+      "output": "D:\\miniconda\\envs\\lpsnb\\Lib\\site-packages\\torch\\jit\\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.\n  warnings.warn(\ntest_ddqn_checkpoint_roundtrip_and_target (baselines.external_rl.tests.test_contracts.Contracts.test_ddqn_checkpoint_roundtrip_and_target) ... ok\ntest_masks_and_mutation_likelihood (baselines.external_rl.tests.test_contracts.Contracts.test_masks_and_mutation_likelihood) ... ok\ntest_real_actor_gradient_and_readonly_eval (baselines.external_rl.tests.test_contracts.Contracts.test_real_actor_gradient_and_readonly_eval) ... ok\ntest_teacher_isolates_live_manager (baselines.external_rl.tests.test_contracts.Contracts.test_teacher_isolates_live_manager) ... ok\ntest_temporal_replay_uses_collected_history (baselines.external_rl.tests.test_contracts.Contracts.test_temporal_replay_uses_collected_history) ... ok\ntest_variable_q_candidates (baselines.external_rl.tests.test_contracts.Contracts.test_variable_q_candidates) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.289s\n\nOK\n"
+    },
+    {
+      "command": [
+        "-m",
+        "baselines.external_rl.evaluate",
+        "--input",
+        "result/external_rl/smoke_am_01/results.csv",
+        "--reference",
+        "AM-A2C-PCB",
+        "--required-seeds",
+        "1",
+        "--output",
+        "result/external_rl/forbidden_smoke.json"
+      ],
+      "exit_code": 1,
+      "expected_exit_code": 1,
+      "passed": true,
+      "output": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"C:\\Users\\Administrator\\OneDrive\\Desktop\\pcb��\\02_˫Actor_PPO_��̬�ص���������Ŀ\\baselines\\external_rl\\evaluate.py\", line 22, in <module>\n    if __name__=='__main__': shared.main()\n                             ^^^^^^^^^^^^^\n  File \"C:\\Users\\Administrator\\OneDrive\\Desktop\\pcb��\\02_˫Actor_PPO_��̬�ص���������Ŀ\\baselines\\unified_evaluator.py\", line 182, in main\n    records = load_records([Path(value) for value in args.input])\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Administrator\\OneDrive\\Desktop\\pcb��\\02_˫Actor_PPO_��̬�ص���������Ŀ\\baselines\\external_rl\\evaluate.py\", line 19, in checked_load_records\n    raise ValueError('External RL result missing full-evaluation evidence status; smoke is forbidden')\nValueError: External RL result missing full-evaluation evidence status; smoke is forbidden\n"
+    }
+  ],
+  "formal_training_completed": false,
+  "paper_exact_reproduction": false,
+  "data_status": "PRE_FORMAL_ONLY_PROXY_DATA",
+  "unified_evaluator_integration": "PASS, 4 external methods x 2 validation scenes x 1 seed; not a performance comparison",
+  "known_limits": [
+    "Paper-specific adaptation differences documented in fidelity.json",
+    "No five-seed convergence or matched tuning-budget experiment",
+    "No rule-selector paper reproduction",
+    "No staged checkpoint continuation or training resume"
+  ]
+}

@@ -1,14 +1,4 @@
-"""
-manager_policy.py
-=================
-上层宏观拆批决策策略网络 ManagerPolicy（规范第 8 章、第 18.4 节 Gate 8 核心执行体）
-
-功能说明：
-  1. 基于 HGNN 全局图表征 g 与当前待排工单表征 h_i，计算候选划分模板的评分。
-  2. 施加动作掩码 M^S：将不可行模板的 logit 置为负无穷。
-  3. 通过 Softmax 输出概率分布 pi^S(p | s^S)。
-  4. 确保被掩码模板的选择概率置为 0.0。
-"""
+"""上层分批策略网络 ManagerPolicy，基于全局图特征与工单嵌入输出候选拆分模板概率分布。"""
 
 from __future__ import annotations
 

@@ -61,6 +61,7 @@ class EventRecord:
     cmax_before: Optional[float] = None
     cmax_after: Optional[float] = None
     errors: Tuple[str, ...] = ()
+    decision_s: Optional[float] = None  # trigger through validated atomic commit
 
 
 @dataclass
@@ -341,6 +342,7 @@ def run_rule_scenario(
     failure: Optional[str] = None
 
     while manager.pending_event_ids:
+        event_started = time.perf_counter()
         context = manager.trigger_next_event()
         initial_k = context.k_scope
         current_context = context
@@ -377,6 +379,7 @@ def run_rule_scenario(
                                 action=canonical_rule,
                                 cmax_before=float(current_context.base_solution.makespan),
                                 cmax_after=float(solution.makespan),
+                                decision_s=time.perf_counter() - event_started,
                             )
                         )
                         committed += 1
@@ -403,6 +406,7 @@ def run_rule_scenario(
                     committed=False,
                     action=canonical_rule,
                     errors=tuple(errors),
+                    decision_s=time.perf_counter() - event_started,
                 )
             )
             manager.rollback_active()

@@ -1,19 +1,8 @@
-"""
-rollout_buffer.py
-=================
-事务隔离的双层经验回放池（规范第 13 章、第 18.2 节冻结项 4、第 18.4 节 Gate 9 核心执行体）
-
-功能说明：
-  1. 提供 ManagerRolloutBuffer 与 WorkerRolloutBuffer。
-  2. 实现微观临时轨迹隔离，维护 temporary_worker_trajectory。
-  3. 遵循事务提交机制：
-     - 仅在 commit_option 成功后，将临时轨迹转入正式 WorkerRolloutBuffer；
-     - 若发生 rollback_option，清空临时轨迹，确保缓冲区只保留有效采样。
-  4. 支持半MDP跳步 GAE 与微观单步 GAE 优势函数计算。
-"""
+"""双层经验回放池，支持事务隔离的临时轨迹记录与 GAE 计算。"""
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
@@ -80,12 +69,7 @@ class ManagerRolloutBuffer:
         self.values.append(value.detach().cpu())
 
     def compute_returns_and_advantages(self, last_val: float = 0.0):
-        """
-        计算半MDP跳步 GAE 优势：
-        支持 Episode 边界精确截断，严禁跨场景/跨 Episode 价值与优势倒灌污染：
-        delta_k = R_k^S + (1 - done_k) * gamma^{tau_k} V(s_{k+1}) - V(s_k)
-        A_k = delta_k + (1 - done_k) * gamma^{tau_k} lambda A_{k+1}
-        """
+        """计算半MDP跳步 GAE 优势（按 episode 边界截断）。"""
         n = len(self.rewards)
         self.returns = [0.0] * n
         self.advantages = [0.0] * n
@@ -201,11 +185,18 @@ class WorkerRolloutBuffer:
         })
 
     def abort_transaction(self):
-        """事务回滚：物理清空临时轨迹，杜绝脏数据泄漏"""
+        """事务回滚：清空临时轨迹。"""
         self.temporary_worker_trajectory.clear()
 
-    def commit_transaction(self, done: Optional[bool] = None):
-        """事务提交：正式写入正式经验池并硬断言数据完整"""
+    def commit_transaction(
+        self,
+        done: Optional[bool] = None,
+        terminal_reward: float = 0.0,
+    ):
+        """事务提交：正式写入正式经验池并在最后一步叠加事件全局终局奖励。"""
+        extra_reward = float(terminal_reward)
+        if not math.isfinite(extra_reward):
+            raise ValueError(f"terminal_reward must be finite, got {terminal_reward!r}.")
         m = len(self.temporary_worker_trajectory)
         for idx, item in enumerate(self.temporary_worker_trajectory):
             self.g_list.append(item["g"])
@@ -219,7 +210,10 @@ class WorkerRolloutBuffer:
             self.valid_slots_list.append(item["valid_slots"])
             self.order_id_list.append(item.get("order_id"))
             self.actions.append(item["action_idx"])
-            self.rewards.append(item["reward"])
+            step_reward = float(item["reward"])
+            if idx == m - 1:
+                step_reward += extra_reward
+            self.rewards.append(step_reward)
             step_done = bool(done) if (done is not None and idx == m - 1) else bool(item.get("done", False))
             self.dones.append(step_done)
             self.log_probs.append(item["log_prob"])

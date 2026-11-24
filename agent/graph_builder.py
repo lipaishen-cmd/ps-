@@ -36,9 +36,7 @@ EdgeType = Tuple[NodeType, str, NodeType]
 Template = Tuple[int, ...]
 GRAPH_SCHEMA_VERSION = "six-node-20-directed-template10-v20261105"
 
-# ===========================================================================
-# 物理特征归一化参考常数（基于车间物理参数上界）
-# ===========================================================================
+# 物理特征归一化参考常数
 NORM_STACK_COUNT_MAX = 5.0      # 叠板数最大上限 S_max
 NORM_TOOL_CHANGES_MAX = 10.0    # 换刀次数归一化基准
 NORM_WORKLOAD_HOURS = 100.0     # 工单钻孔工时基准 (分钟归一化)
@@ -120,9 +118,7 @@ class PCBGraphBuilder:
         self.time_scale = max(1.0, self.LB_g, max_release, max_due)
         self.slot_map: Dict[Tuple[str, int], int] = {}
 
-        # -------------------------------------------------------------
-        # 高性能 GPU 向量化缓存：静态边索引与静态工单物理特征预计算
-        # -------------------------------------------------------------
+        # 静态边索引与静态工单特征缓存
         self._cached_static_edges: Dict[str, Tuple[torch.Tensor, torch.Tensor]] = {}
         # 1. pool_order (100% 静态)
         fwd_po = self._edge_tensor([(0, index) for index in range(len(self.orders))])

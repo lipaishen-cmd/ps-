@@ -1,17 +1,4 @@
-"""
-ablation_common.py
-==================
-单 Actor 架构消融实验的基础评估与统计模块。
-内部依赖模块：不作为 PyCharm 直接运行入口。
-对齐《PCB_Dynamic_Model_Unified.docx》第 10.4 节与第 10.5 节规范。
-
-功能说明：
-  1. 路径解析与物理环境、统一解码及异构图强化学习模块绑定；
-  2. 标准三组 18/6/6 数据集场景解析（在 val 验证集或 test 测试集上评估）；
-  3. 双维度指标收集（调度效率 Cmax + 车间扰动度指标：真性旧批次迁移数、跨机迁移数、队列逆序数、开工偏差 Delta S、延误损失）；
-  4. 消除幸存者偏差的透明统计（完整可行率、受控失败数、配对有效样本统计、95% 置信区间）；
-  5. 顶刊标准 LaTeX / Markdown 三线表生成与逐事件遥测（event_records.jsonl）序列化。
-"""
+"""单 Actor 架构消融实验的基础评估与统计模块。"""
 
 from __future__ import annotations
 
@@ -30,9 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 import numpy as np
 import torch
 
-# ---------------------------------------------------------------------------
-# 1. 严格路径解析与底层模块注册
-# ---------------------------------------------------------------------------
+# 1. 路径解析与依赖导入
 THIS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = THIS_DIR.parents[1]
 
@@ -113,9 +98,7 @@ def resolve_independent_stage_protocol(
     return train_scenarios, val_scenarios, quotas, schedule
 
 
-# ---------------------------------------------------------------------------
 # 2. 评估数据结构定义
-# ---------------------------------------------------------------------------
 @dataclass
 class EventEvaluationRecord:
     """单个动态事件决策级追踪遥测记录 (Event-level raw Actor telemetry)."""
@@ -193,9 +176,7 @@ class AblationSummaryStatistics:
     total_expansions: int
 
 
-# ---------------------------------------------------------------------------
 # 3. 场景加载与环境验证
-# ---------------------------------------------------------------------------
 def resolve_evaluation_scenarios(
     split: str = "val",
     stage: Optional[int] = None,
@@ -234,8 +215,11 @@ def resolve_evaluation_scenarios(
         if stage is not None:
             if stage not in (1, 2, 3):
                 raise ValueError(f"无效的 stage: {stage} (必须为 1..3)")
-            start = (stage - 1) * 2
-            records = records[start : start + 2]
+            if len(records) % 3 != 0:
+                raise ValueError(f"{split} 场景数 ({len(records)}) 不能被 3 个 Stage 整除。")
+            per_stage = len(records) // 3
+            start = (stage - 1) * per_stage
+            records = records[start : start + per_stage]
 
     files = [str((dataset_dir / str(r["filepath"])).resolve()) for r in records]
     missing = [p for p in files if not os.path.isfile(p)]
@@ -260,9 +244,7 @@ def load_hppo_trainer(
     return trainer
 
 
-# ---------------------------------------------------------------------------
-# 4. 车间动态稳定性扰动指标计算 (消除插入平移误差)
-# ---------------------------------------------------------------------------
+# 4. 车间动态稳定性扰动指标计算
 def compute_perturbation_metrics(
     initial_solution: Solution,
     final_solution: Solution,
@@ -344,9 +326,7 @@ def compute_perturbation_metrics(
     return moved, reassigned, inversions, mean_dev, total_delay
 
 
-# ---------------------------------------------------------------------------
-# 5. 消除幸存者偏差的汇总统计函数
-# ---------------------------------------------------------------------------
+# 5. 汇总统计函数
 def compute_summary_statistics(
     records: List[ScenarioEvaluationRecord],
 ) -> AblationSummaryStatistics:
@@ -411,9 +391,7 @@ def compute_summary_statistics(
     )
 
 
-# ---------------------------------------------------------------------------
-# 6. 事件级遥测记录序列化支持
-# ---------------------------------------------------------------------------
+# 6. 事件级遥测记录序列化
 def save_event_records(records: List[EventEvaluationRecord], output_path: str | Path) -> None:
     """将逐事件细粒度决策遥测持久化为 JSON Lines 文件。"""
     out_p = Path(output_path)
@@ -423,9 +401,7 @@ def save_event_records(records: List[EventEvaluationRecord], output_path: str | 
             f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
 
 
-# ---------------------------------------------------------------------------
-# 7. 学术三线表生成器 (Markdown & LaTeX)
-# ---------------------------------------------------------------------------
+# 7. 三线表生成 (Markdown & LaTeX)
 def format_ablation_markdown_table(
     summaries: List[AblationSummaryStatistics],
     anchor_id: str = PROPOSED_METHOD_ID,

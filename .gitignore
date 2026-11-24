@@ -1,37 +1,7 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
 
 # Environments
 .env
@@ -39,32 +9,32 @@ pip-delete-this-directory.txt
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# IDE and editors
+# IDE and temporary files
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+*.tmp
 *.lock
-.process.lock
+.dynamic_multi_scenario_trainer.lock
+pause.flag
 
-# Operating System files
+# OS files
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ================================
-# 实验结果、数据文件与模型权重（纯代码模式）
-# ================================
+# Experiment outputs, datasets, checkpoints, and READMEs
 result/
-data/dynamic_scenarios/
-data/test_samples/
+data/*
+!data/generators/
+README.md
 *.xlsx
 *.xls
+*.csv
+*.ndjson
 *.pt
 *.pth
-*.json
 events.out.tfevents.*

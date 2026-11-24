@@ -1,22 +1,4 @@
-"""
-solution_lifecycle.py
-=====================
-解结构生命周期、双向规范化映射、断言验证器与原子事务管理器
-（规范第 8 章、第 9.8 节、第 9.14 节，TC-03、TC-05、TC-06、TC-08 核心）
-
-功能说明：
-  1. 解对象的标准化构建（create_empty_solution）与深克隆（clone_solution）。
-  2. 规范化映射 Φ（normalize_solution）：保证机器队列主表示的标准字典序。
-  3. 支配规约合并（repair_adjacent_batches）：合并同机相邻同订单且不超过主轴容量的批次。
-  4. 五大物理断言验证器（validate_solution，只读，严禁修改解）：
-     - A1 (TC-03): 需求精确守恒（∑ b.stack_count == W_i，零容差）。
-     - A2 (TC-04): 机器资格合法性（m ∈ order.eligible_machines）。
-     - A3 (TC-05): 主轴容量合法性（b.stack_count <= machine.spindles）。
-     - A4 (TC-06): 批次 u_id 唯一性与出现性（单解内每个活跃 u_id 恰好出现一次）。
-     - A5 (TC-10 & 时序): 跨池物理隔离与时间无重叠性。
-  5. 动态拆分原子事务（AtomicTransaction，TC-08 核心）：
-     - 支持事务级深拷贝快照、原子提交（Commit）与异常自动全量回滚（Rollback）。
-"""
+"""解结构生命周期管理、规范化映射、物理约束验证与原子事务。"""
 
 from __future__ import annotations
 
@@ -187,32 +169,7 @@ def validate_solution(
     release_times: Optional[Dict[str, float]] = None,
     require_decoded: bool = False,
 ) -> Tuple[bool, List[str]]:
-    """
-    五大物理断言严格验证器（规范 9.8 节，只读操作，严禁修改解状态）。
-
-    断言检查清单：
-      A1 (TC-03): 订单需求精确守恒（∑ b.stack_count == W_i，零容差）。
-      A2 (TC-04): 机器资格合法性（m ∈ order.eligible_machines）。
-      A3 (TC-05): 主轴容量与整数性合法性（b.stack_count ∈ Z+, b.stack_count <= machine.spindles）。
-      A4 (TC-06): 批次 u_id 唯一性（每个活跃 u_id 在全部队列中恰好出现一次）。
-      A5 (TC-10 & 时序): 跨池隔离，且已解码批次满足式 (16) 时间递推。
-
-    参数
-    ----
-    solution        : Solution — 待校验的解
-    orders_dict     : Dict[str, Order] — 本池订单字典
-    machines_dict   : Optional[Dict[str, Machine]]
-    raise_exception : bool — 若为 True，任一断言失败立即 raise ValueError
-    verify_time_recurrence: bool — 若为 True，逐批校验工时公式与开工递推 (式 16)
-    event_time      : float — 动态事件时刻 t_e（静态为 0.0）
-    frozen_uids     : Optional[Iterable[int]] — 冻结批次 UID 集合（冻结批次跳过动态时间重算）
-    release_times   : Optional[Dict[str, float]] — 订单释放时刻映射字典
-    require_decoded : bool — 若为 True，解中所有活跃批次必须具有大于 0 的有效时间，未解码批次直接判定违规
-
-    返回
-    ----
-    (is_valid: bool, errors: List[str])
-    """
+    """只读校验解是否满足需求守恒、机器资格、主轴容量、u_id 唯一性与时序约束。"""
     if machines_dict is None:
         machines_dict = ALL_MACHINES
 

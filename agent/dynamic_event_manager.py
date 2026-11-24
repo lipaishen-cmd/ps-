@@ -276,7 +276,7 @@ class RescheduleTransaction:
                 )
 
 
-        # 稳定补集刚性结构签名校验 (式 10): 所属机台、订单、叠数及机台内相对先后次序严格不变
+        # 稳定补集结构签名校验 (式 10): 所属机台、订单、叠数及机台内相对次序不变
         if self.context.stable_signature:
             from scope_selector import compute_stable_signature
             cand_stable_sig = compute_stable_signature(candidate, self.context.stable_uids)

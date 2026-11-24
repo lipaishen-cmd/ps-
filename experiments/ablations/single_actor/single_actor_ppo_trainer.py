@@ -236,14 +236,33 @@ class SingleActorPPOTrainer:
             decisions.append(decision)
             if record_rollout and decision.trainable:
                 event_start = len(self.rollout_buffer)
-                for record in decision.manager_records:
-                    self._add_manager_record(record)
-                for record in decision.worker_records:
-                    self._add_worker_record(record)
+                chronological = list(getattr(decision, "chronological_records", []) or [])
+                expected_total = len(decision.manager_records) + len(decision.worker_records)
+                if not chronological:
+                    raise RuntimeError(
+                        "A trainable DynamicDecision is missing chronological_records for SingleActor GAE."
+                    )
+                if len(chronological) != expected_total:
+                    raise RuntimeError(
+                        "chronological_records length does not match manager_records + worker_records: "
+                        f"{len(chronological)} != {expected_total}."
+                    )
+                for record_type, record in chronological:
+                    if record_type == SPLIT_ACTION:
+                        self._add_manager_record(record)
+                    elif record_type == PLACEMENT_ACTION:
+                        self._add_worker_record(record)
+                    else:
+                        raise ValueError(f"Unsupported chronological record_type: {record_type!r}")
                 if len(self.rollout_buffer) == event_start:
                     raise RuntimeError("A trainable event produced no SingleActor transitions.")
+                if self.rollout_buffer.transitions[-1]["decision_type"] != PLACEMENT_ACTION:
+                    raise RuntimeError(
+                        "Expected the final transition of a trainable event to be a placement action."
+                    )
                 # The event-level makespan reward is assigned once to the last
-                # physical action; preceding split decisions receive it through GAE.
+                # physical placement action; preceding interleaved split/placement
+                # decisions receive it in true execution order through GAE.
                 self.rollout_buffer.add_terminal_reward(float(decision.reward))
                 if not manager.pending_event_ids:
                     self.rollout_buffer.mark_last_done()

@@ -1,17 +1,4 @@
-"""
-reward.py
-=========
-双时间尺度分层差分奖励实现
-对应当前方法文档《PCB.docx》式 (30)、(31) 及参数规范第 5.1 节。
-
-核心功能：
-  1. 宏观事件级差分奖励 (式 30):
-       R_e^S = - [C_max(S_e^{actor}) - C_max(S^{e-1})] / kappa_R,  kappa_R = 10.0
-       基于车间自身前后状态差分构建。
-  2. 微观放置单步差分奖励 (式 31):
-       r_{e,k}^P = -10.0 * Delta C_m(k) / max(100.0, C_max(S_{e,k}^{curr}))
-       其中 Delta C_m(k) = C_hat_m^{(k)} - C_bar_g^{(k-1)}，提供密集局部反馈。
-"""
+"""双时间尺度分层差分奖励计算。"""
 
 from __future__ import annotations
 
@@ -20,10 +7,6 @@ import math
 
 REWARD_CONTRACT_VERSION = "pool-mean-micro-incremental-macro-v20261105"
 
-
-# =========================================================================
-# 状态差分奖励计算函数（式 30 与式 31）
-# =========================================================================
 
 def compute_macro_event_reward(
     committed_makespan: float,
